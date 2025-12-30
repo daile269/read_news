@@ -289,6 +289,8 @@ app.listen(PORT, () => {
 // KHỞI ĐỘNG CLIENT
 // ============================================
 
+let client; // Đưa client ra scope ngoài để các handler có thể truy cập
+
 async function main() {
   console.log('🚀 ================================');
   console.log('🤖 TELEGRAM USERBOT TRANSLATOR');
@@ -297,7 +299,7 @@ async function main() {
   
   // Khởi tạo Telegram Client với session
   const stringSession = new StringSession(SESSION_STRING);
-  const client = new TelegramClient(stringSession, API_ID, API_HASH, {
+  client = new TelegramClient(stringSession, API_ID, API_HASH, {
     connectionRetries: 5,
   });
   
@@ -466,14 +468,19 @@ main().catch(err => {
 });
 
 // Xử lý tín hiệu tắt
-process.on('SIGINT', () => {
-  console.log('\n\n🛑 Đang tắt userbot...');
+const gracefulShutdown = async (signal) => {
+  console.log(`\n\n🛑 Nhận tín hiệu ${signal}. Đang tắt userbot...`);
+  if (client) {
+    try {
+      await client.disconnect();
+      console.log('🔌 Đã ngắt kết nối Telegram.');
+    } catch (err) {
+      console.error('❌ Lỗi khi ngắt kết nối:', err.message);
+    }
+  }
   console.log('✅ Đã tắt thành công!');
   process.exit(0);
-});
+};
 
-process.on('SIGTERM', () => {
-  console.log('\n\n🛑 Đang tắt userbot...');
-  console.log('✅ Đã tắt thành công!');
-  process.exit(0);
-});
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
