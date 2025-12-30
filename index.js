@@ -16,6 +16,7 @@ const { StringSession } = require('telegram/sessions');
 const { NewMessage } = require('telegram/events');
 const input = require('input');
 const OpenAI = require('openai');
+const express = require('express');
 
 // ============================================
 // CẤU HÌNH VÀ KHỞI TẠO
@@ -248,6 +249,40 @@ async function handleNewMessage(client, event) {
     console.log('⚠️  Tiếp tục hoạt động...\n');
   }
 }
+
+// ============================================
+// HTTP SERVER (CHO RENDER WEB SERVICE)
+// ============================================
+
+// Tạo Express app
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Health check endpoint (để Render & UptimeRobot ping)
+app.get('/', (req, res) => {
+  const uptime = process.uptime();
+  const hours = Math.floor(uptime / 3600);
+  const minutes = Math.floor((uptime % 3600) / 60);
+  
+  res.json({
+    status: 'online',
+    message: 'Telegram Translator Bot đang hoạt động! 🤖',
+    uptime: `${hours}h ${minutes}m`,
+    timestamp: new Date().toISOString(),
+    processedMessages: processedMessages.size
+  });
+});
+
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
+// Khởi động HTTP server
+app.listen(PORT, () => {
+  console.log(`🌐 HTTP Server đang chạy trên port ${PORT}`);
+  console.log(`   Health check: http://localhost:${PORT}/`);
+  console.log('');
+});
 
 // ============================================
 // KHỞI ĐỘNG CLIENT
