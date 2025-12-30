@@ -358,6 +358,25 @@ async function main() {
   console.log('   - Thử gửi tin nhắn vào channel hoặc đợi tin mới');
   console.log('   - Nếu không thấy log [DEBUG], có thể channel chưa join');
   console.log('');
+  
+  // ============================================
+  // KEEP-ALIVE MECHANISM (Tránh sleep trên cloud)
+  // ============================================
+  
+  console.log('💓 Kích hoạt Keep-Alive (ping mỗi 10 phút)...');
+  console.log('   → Giúp bot không bị sleep trên Render/Railway');
+  console.log('');
+  
+  // Ping Telegram mỗi 10 phút để giữ kết nối
+  setInterval(async () => {
+    try {
+      await client.getMe();
+      const now = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+      console.log(`💓 [Keep-Alive] Ping thành công - ${now}`);
+    } catch (error) {
+      console.error('❌ [Keep-Alive] Ping thất bại:', error.message);
+    }
+  }, 10 * 60 * 1000); // 10 phút
 }
 
 // Chạy main function
