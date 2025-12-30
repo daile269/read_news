@@ -22,7 +22,8 @@
     "express": "^5.2.1",
     "input": "^1.0.1",
     "openai": "^4.73.0",
-    "telegram": "^2.25.11"
+    "telegram": "^2.25.11",
+    "axios": "^1.6.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

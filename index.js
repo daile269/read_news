@@ -17,6 +17,7 @@ const { NewMessage } = require('telegram/events');
 const input = require('input');
 const OpenAI = require('openai');
 const express = require('express');
+const axios = require('axios'); // Thêm axios để ping URL
 
 // ============================================
 // CẤU HÌNH VÀ KHỞI TẠO
@@ -300,14 +301,34 @@ async function main() {
     connectionRetries: 5,
   });
   
-  console.log('🔐 Đang kết nối tới Telegram...');
-  
-  await client.start({
-    phoneNumber: async () => PHONE_NUMBER,
-    password: async () => await input.text('Nhập Password 2FA (nếu có): '),
-    phoneCode: async () => await input.text('Nhập mã xác thực từ Telegram: '),
-    onError: (err) => console.error('❌ Lỗi:', err),
-  });
+  let retryCount = 0;
+  const maxRetries = 3;
+
+  while (retryCount < maxRetries) {
+    try {
+      await client.start({
+        phoneNumber: async () => PHONE_NUMBER,
+        password: async () => await input.text('Nhập Password 2FA (nếu có): '),
+        phoneCode: async () => await input.text('Nhập mã xác thực từ Telegram: '),
+        onError: (err) => {
+          if (err.message.includes('AUTH_KEY_DUPLICATED')) {
+            console.warn('⚠️  Cảnh báo: Session đang được sử dụng ở nơi khác.');
+          } else {
+            console.error('❌ Lỗi:', err.message);
+          }
+        },
+      });
+      break; // Thành công thì thoát vòng lặp
+    } catch (error) {
+      if (error.message.includes('AUTH_KEY_DUPLICATED') && retryCount < maxRetries - 1) {
+        retryCount++;
+        console.log(`⏳ Đang đợi instance cũ tắt... (Thử lại ${retryCount}/${maxRetries} sau 15 giây)`);
+        await new Promise(resolve => setTimeout(resolve, 15000));
+      } else {
+        throw error;
+      }
+    }
+  }
   
   console.log('✅ Đã kết nối thành công!');
   console.log('');
@@ -405,13 +426,37 @@ async function main() {
   // Ping Telegram mỗi 10 phút để giữ kết nối
   setInterval(async () => {
     try {
+      if (!client.connected) {
+        console.log('🔄 Đang kết nối lại...');
+        await client.connect();
+      }
+      
       await client.getMe();
       const now = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
       console.log(`💓 [Keep-Alive] Ping thành công - ${now}`);
     } catch (error) {
+      if (error.message.includes('AUTH_KEY_DUPLICATED')) {
+        console.warn('⚠️  Phát hiện instance mới đã khởi động. Đang nhường chỗ cho instance mới...');
+        console.log('🛑 Đang tắt instance cũ để tránh xung đột session...');
+        process.exit(0);
+      }
       console.error('❌ [Keep-Alive] Ping thất bại:', error.message);
     }
   }, 10 * 60 * 1000); // 10 phút
+
+  // --- SELF-PING ĐỂ GIỮ RENDER LUÔN THỨC ---
+  const APP_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+  console.log(`📡 Kích hoạt Self-Ping tới: ${APP_URL}`);
+  
+  setInterval(async () => {
+    try {
+      // Gọi tới chính URL của mình để Render không sleep
+      await axios.get(APP_URL);
+      console.log(`🌐 [Self-Ping] Đã gửi request giữ Render thức - ${new Date().toLocaleTimeString()}`);
+    } catch (error) {
+      console.error('⚠️ [Self-Ping] Lỗi khi tự ping:', error.message);
+    }
+  }, 10 * 60 * 1000); // Tự ping mỗi 10 phút
 }
 
 // Chạy main function
