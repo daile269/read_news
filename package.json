@@ -1,0 +1,29 @@
+{
+  "name": "telegram-translator-userbot",
+  "version": "2.0.0",
+  "description": "Tool tự động theo dõi tin nhắn từ Telegram Channel (với user account) và dịch sang tiếng Việt bằng OpenAI GPT",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "telegram",
+    "userbot",
+    "translator",
+    "openai",
+    "gpt",
+    "mtproto"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "telegram": "^2.25.11",
+    "input": "^1.0.1",
+    "openai": "^4.73.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
