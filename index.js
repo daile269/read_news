@@ -208,8 +208,15 @@ async function handleNewMessage(client, event) {
         console.log('📝 Caption đã dịch:');
         console.log(`   ${translatedCaption.substring(0, 100)}${translatedCaption.length > 100 ? '...' : ''}`);
         
-        // Gửi ảnh + caption đã dịch
-        await sendPhotoToTargetChat(client, message.photo, translatedCaption, messageId);
+        // Kiểm tra độ dài caption (Giới hạn của Telegram cho caption ảnh là 1024 ký tự)
+        if (translatedCaption.length > 1024) {
+          console.log('⚠️  Caption sau khi dịch quá dài (>1024 ký tự).');
+          console.log('📤 Chuyển sang gửi dưới dạng tin nhắn văn bản (không gửi kèm ảnh) để tránh mất nội dung.');
+          await sendToTargetChat(client, translatedCaption, messageId);
+        } else {
+          // Gửi ảnh + caption đã dịch
+          await sendPhotoToTargetChat(client, message.photo, translatedCaption, messageId);
+        }
       } else {
         // Ảnh không có caption - chỉ forward ảnh
         console.log('   Ảnh không có caption, gửi nguyên ảnh...');
