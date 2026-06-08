@@ -94,29 +94,61 @@ Yêu cầu:
 async function translateText(text) {
   try {
     console.log("🔄 Đang dịch văn bản...");
+    // Prefer Responses API for newer models (gpt-5.x family). Fallback to chat completions for older models.
+    if (/gpt-5/i.test(OPENAI_MODEL)) {
+      const resp = await openai.responses.create({
+        model: OPENAI_MODEL,
+        input: [
+          { role: "system", content: TRANSLATION_PROMPT },
+          { role: "user", content: text },
+        ],
+        max_output_tokens: 2000,
+        temperature: 0.3,
+      });
 
+      // Parse response.output
+      let translatedText = "";
+      if (resp.output_text) {
+        translatedText = resp.output_text.trim();
+      } else if (Array.isArray(resp.output)) {
+        for (const out of resp.output) {
+          if (!out.content) continue;
+          for (const c of out.content) {
+            if (c.type === "output_text" && c.text) translatedText += c.text;
+            else if (c.type === "message" && c.text) translatedText += c.text;
+            else if (c.type === "text" && c.text) translatedText += c.text;
+            else if (typeof c === "string") translatedText += c;
+          }
+        }
+        translatedText = translatedText.trim();
+      }
+
+      console.log("✅ Dịch thành công (Responses API)!");
+      return translatedText;
+    }
+
+    // Fallback: chat completions (for models using chat completions API)
     const response = await openai.chat.completions.create({
       model: OPENAI_MODEL,
       messages: [
-        {
-          role: "system",
-          content: TRANSLATION_PROMPT,
-        },
-        {
-          role: "user",
-          content: text,
-        },
+        { role: "system", content: TRANSLATION_PROMPT },
+        { role: "user", content: text },
       ],
       temperature: 0.3,
-      max_tokens: 2000,
+      max_completion_tokens: 2000,
     });
 
     const translatedText = response.choices[0].message.content.trim();
-    console.log("✅ Dịch thành công!");
-
+    console.log("✅ Dịch thành công (Chat API)!");
     return translatedText;
   } catch (error) {
-    console.error("❌ Lỗi khi dịch văn bản:", error.message);
+    // Log more details when available to help debugging
+    console.error("❌ Lỗi khi dịch văn bản:", error.message || error);
+    if (error.response && error.response.data) {
+      console.error("→ OpenAI response:", error.response.data);
+    } else if (error.data) {
+      console.error("→ OpenAI error data:", error.data);
+    }
 
     if (error.code === "insufficient_quota") {
       throw new Error("Hết quota OpenAI API. Vui lòng kiểm tra tài khoản.");
