@@ -17,7 +17,6 @@ const { NewMessage } = require("telegram/events");
 const input = require("input");
 const OpenAI = require("openai");
 const express = require("express");
-const axios = require("axios"); // Thêm axios để ping URL
 
 // ============================================
 // CẤU HÌNH VÀ KHỞI TẠO
@@ -552,24 +551,6 @@ async function main() {
     10 * 60 * 1000,
   ); // 10 phút
 
-  // --- SELF-PING ĐỂ GIỮ RENDER LUÔN THỨC ---
-  const APP_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
-  console.log(`📡 Kích hoạt Self-Ping tới: ${APP_URL}`);
-
-  setInterval(
-    async () => {
-      try {
-        // Gọi tới chính URL của mình để Render không sleep
-        await axios.get(APP_URL);
-        console.log(
-          `🌐 [Self-Ping] Đã gửi request giữ Render thức - ${new Date().toLocaleTimeString()}`,
-        );
-      } catch (error) {
-        console.error("⚠️ [Self-Ping] Lỗi khi tự ping:", error.message);
-      }
-    },
-    10 * 60 * 1000,
-  ); // Tự ping mỗi 10 phút
 }
 
 // Chạy main function
