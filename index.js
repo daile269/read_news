@@ -28,7 +28,6 @@ const requiredEnvVars = [
   "TELEGRAM_API_ID",
   "TELEGRAM_API_HASH",
   "TELEGRAM_PHONE_NUMBER",
-  "SOURCE_CHANNEL_USERNAME",
   "TARGET_CHAT_ID",
   "OPENAI_API_KEY",
 ];
@@ -41,6 +40,14 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
+if (!process.env.SOURCE_CHANNEL_USERNAME && !process.env.SOURCE_CHANNEL_ID) {
+  console.error(
+    "❌ Thiếu cấu hình nguồn: cần SOURCE_CHANNEL_USERNAME hoặc SOURCE_CHANNEL_ID",
+  );
+  console.error("⚠️  Vui lòng kiểm tra file .env");
+  process.exit(1);
+}
+
 // Telegram Client Config
 const API_ID = parseInt(process.env.TELEGRAM_API_ID);
 const API_HASH = process.env.TELEGRAM_API_HASH;
@@ -48,7 +55,11 @@ const PHONE_NUMBER = process.env.TELEGRAM_PHONE_NUMBER;
 const SESSION_STRING = process.env.TELEGRAM_SESSION || "";
 
 // Channel & Group Config
-const SOURCE_CHANNEL = process.env.SOURCE_CHANNEL_USERNAME; // @channel_username
+const SOURCE_CHANNEL_USERNAME = (process.env.SOURCE_CHANNEL_USERNAME || "").trim();
+const SOURCE_CHANNEL_ID = (process.env.SOURCE_CHANNEL_ID || "")
+  .trim()
+  .split(/\s+/)[0];
+const SOURCE_CHANNEL = SOURCE_CHANNEL_USERNAME || SOURCE_CHANNEL_ID;
 const TARGET_CHAT_ID = process.env.TARGET_CHAT_ID; // ID hoặc username
 
 // OpenAI Config
@@ -434,15 +445,34 @@ async function main() {
     console.error("");
   }
 
+  const sourceChatIds = new Set();
+  if (SOURCE_CHANNEL_ID) {
+    sourceChatIds.add(SOURCE_CHANNEL_ID);
+  }
+  if (targetEntity && targetEntity.id) {
+    const coreId = targetEntity.id.toString().replace(/^-100/, "").replace(/^-/, "");
+    sourceChatIds.add(coreId);
+    sourceChatIds.add(`-${coreId}`);
+    sourceChatIds.add(`-100${coreId}`);
+  }
+
+  console.log("🎯 Source Chat IDs đang theo dõi:");
+  console.log(`   ${Array.from(sourceChatIds).join(", ") || "(chưa resolve được ID)"}`);
+  console.log("");
+
   // DEBUG: Lắng nghe TẤT CẢ message (không filter)
   console.log("🔍 [DEBUG MODE] Lắng nghe TẤT CẢ tin nhắn...");
   client.addEventHandler(async (event) => {
     const msg = event.message;
     if (!msg || !msg.chatId) return;
+    const chatId = msg.chatId.toString();
     console.log(
-      `\n🔔 [DEBUG] Nhận message từ Chat ID: ${msg.chatId.toString()}`,
+      `\n🔔 [DEBUG] Nhận message từ Chat ID: ${chatId}`,
     );
     console.log(`   ID: ${msg.id}`);
+    if (sourceChatIds.has(chatId)) {
+      console.log("   ✅ Match SOURCE channel theo Chat ID");
+    }
     if (msg.text) {
       console.log(
         `   Text: ${msg.text.substring(0, 50)}${msg.text.length > 50 ? "..." : ""}`,
@@ -463,14 +493,19 @@ async function main() {
 
   client.addEventHandler(
     async (event) => {
+      const msg = event.message;
+      if (!msg || !msg.chatId) return;
+      const chatId = msg.chatId.toString();
+      if (!sourceChatIds.has(chatId)) {
+        return;
+      }
       console.log(
         "\n📺 [CHANNEL EVENT] Nhận được message từ channel chỉ định!",
       );
+      console.log(`   Source Chat ID matched: ${chatId}`);
       await handleNewMessage(client, event);
     },
-    new NewMessage({
-      chats: [SOURCE_CHANNEL], // Sử dụng username (string) để GramJS tự resolve an toàn hơn
-    }),
+    new NewMessage({}),
   );
 
   console.log("🎯 Userbot đang hoạt động!");
