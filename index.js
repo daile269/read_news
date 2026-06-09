@@ -372,6 +372,8 @@ app.listen(PORT, () => {
 // ============================================
 
 let client; // Đưa client ra scope ngoài để các handler có thể truy cập
+let sourceEntity = null;
+let sourceLastSeenMessageId = 0;
 
 async function main() {
   console.log("🚀 ================================");
@@ -453,6 +455,7 @@ async function main() {
   try {
     console.log("🔍 Đang kiểm tra channel...");
     targetEntity = await client.getEntity(SOURCE_CHANNEL);
+    sourceEntity = targetEntity;
     console.log("✅ Tìm thấy channel/group:");
     console.log(
       `   Tên: ${targetEntity.title || targetEntity.firstName || "N/A"}`,
@@ -484,6 +487,18 @@ async function main() {
     console.error("   2. Đảm bảo bạn đã join/subscribe channel này");
     console.error("   3. Thử mở channel trong Telegram trước");
     console.error("");
+  }
+
+  if (sourceEntity) {
+    try {
+      const latestMessages = await client.getMessages(sourceEntity, { limit: 1 });
+      if (latestMessages && latestMessages.length > 0 && latestMessages[0].id) {
+        sourceLastSeenMessageId = latestMessages[0].id;
+        console.log(`🧭 Baseline message ID: ${sourceLastSeenMessageId}`);
+      }
+    } catch (baselineErr) {
+      console.log("ℹ️  Không lấy được baseline message ID:", baselineErr.message);
+    }
   }
 
   const sourceChatIds = new Set();
@@ -556,6 +571,29 @@ async function main() {
   console.log("   - Thử gửi tin nhắn vào channel hoặc đợi tin mới");
   console.log("   - Nếu không thấy log [DEBUG], có thể channel chưa join");
   console.log("");
+
+  // Fallback polling để bắt bài mới nếu Telegram không đẩy event cho channel này
+  console.log("🔁 Kích hoạt poll fallback mỗi 45 giây...");
+  setInterval(async () => {
+    if (!sourceEntity) return;
+
+    try {
+      const recentMessages = await client.getMessages(sourceEntity, { limit: 10 });
+      const newMessages = recentMessages
+        .filter((message) => message && message.id && message.id > sourceLastSeenMessageId)
+        .sort((left, right) => left.id - right.id);
+
+      if (!newMessages.length) return;
+
+      for (const message of newMessages) {
+        sourceLastSeenMessageId = Math.max(sourceLastSeenMessageId, message.id);
+        console.log(`\n🔁 [POLL] Phát hiện message mới: ${message.id}`);
+        await handleNewMessage(client, { message });
+      }
+    } catch (pollErr) {
+      console.error("❌ [POLL] Lỗi khi kiểm tra message mới:", pollErr.message);
+    }
+  }, 45 * 1000);
 
   // ============================================
   // KEEP-ALIVE MECHANISM (Tránh sleep trên cloud)
