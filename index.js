@@ -54,7 +54,17 @@ const PHONE_NUMBER = process.env.TELEGRAM_PHONE_NUMBER;
 const SESSION_STRING = process.env.TELEGRAM_SESSION || "";
 
 // Channel & Group Config
-const SOURCE_CHANNEL_USERNAME = (process.env.SOURCE_CHANNEL_USERNAME || "").trim();
+const normalizeTelegramUsername = (value) => {
+  const normalized = (value || "").trim().replace(/^https?:\/\/t\.me\//i, "");
+  if (!normalized) return "";
+  return normalized.startsWith("@") || normalized.startsWith("-")
+    ? normalized
+    : `@${normalized}`;
+};
+
+const SOURCE_CHANNEL_USERNAME = normalizeTelegramUsername(
+  process.env.SOURCE_CHANNEL_USERNAME,
+);
 const SOURCE_CHANNEL_ID = (process.env.SOURCE_CHANNEL_ID || "")
   .trim()
   .split(/\s+/)[0];
