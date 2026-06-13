@@ -180,12 +180,42 @@ async function translateText(text) {
  * @param {string} translatedText - Văn bản đã dịch
  * @param {number} originalMessageId - ID tin nhắn gốc
  */
+function buildMessageLink(messageId) {
+  try {
+    // Prefer username if available
+    let username = null;
+    if (sourceEntity && sourceEntity.username) username = sourceEntity.username;
+    else if (SOURCE_CHANNEL_USERNAME) username = SOURCE_CHANNEL_USERNAME;
+
+    if (username) {
+      const cleaned = username.toString().trim().replace(/^@/, "").replace(/^https?:\/\/t\.me\//i, "");
+      if (cleaned) return `https://t.me/${cleaned}/${messageId}`;
+    }
+
+    // Fallback: use numeric channel id to build t.me/c/... link
+    const id = SOURCE_CHANNEL_ID || (sourceEntity && sourceEntity.id && sourceEntity.id.toString());
+    if (id) {
+      const core = id.toString().replace(/^-100/, "").replace(/^-/, "");
+      if (core) return `https://t.me/c/${core}/${messageId}`;
+    }
+  } catch (e) {
+    // ignore and return null
+  }
+  return null;
+}
+
 async function sendToTargetChat(client, translatedText, originalMessageId) {
   try {
     console.log("📤 Đang gửi tin nhắn đã dịch...");
 
+    // Thêm link bài gốc (nếu có)
+    const link = buildMessageLink(originalMessageId);
+    const messageWithLink = link
+      ? `${translatedText}\n\n🔗 Bài gốc: ${link}`
+      : translatedText;
+
     await client.sendMessage(TARGET_CHAT_ID, {
-      message: translatedText,
+      message: messageWithLink,
     });
 
     console.log(
@@ -213,10 +243,20 @@ async function sendPhotoToTargetChat(
   try {
     console.log("📤 Đang gửi ảnh với caption đã dịch...");
 
-    await client.sendMessage(TARGET_CHAT_ID, {
-      message: translatedCaption || "",
-      file: photo,
-    });
+      // Thêm link bài gốc (nếu có)
+      const link = buildMessageLink(originalMessageId);
+      const messageWithLink = translatedCaption
+        ? link
+          ? `${translatedCaption}\n\n🔗 Bài gốc: ${link}`
+          : translatedCaption
+        : link
+        ? `🔗 Bài gốc: ${link}`
+        : "";
+
+      await client.sendMessage(TARGET_CHAT_ID, {
+        message: messageWithLink,
+        file: photo,
+      });
 
     console.log(
       `✅ Đã gửi ảnh thành công! (Original msg ID: ${originalMessageId})`,
@@ -273,15 +313,20 @@ async function handleNewMessage(client, event) {
           `   ${translatedCaption.substring(0, 100)}${translatedCaption.length > 100 ? "..." : ""}`,
         );
 
-        // Kiểm tra độ dài caption (Giới hạn của Telegram cho caption ảnh là 1024 ký tự)
-        if (translatedCaption.length > 1024) {
-          console.log("⚠️  Caption sau khi dịch quá dài (>1024 ký tự).");
+        // Kiểm tra độ dài caption + link (Giới hạn của Telegram cho caption ảnh là 1024 ký tự)
+        const possibleLink = buildMessageLink(messageId);
+        const linkSuffix = possibleLink ? `\n\n🔗 Bài gốc: ${possibleLink}` : "";
+        const combinedLen = translatedCaption.length + linkSuffix.length;
+
+        if (combinedLen > 1024) {
+          console.log("⚠️  Caption sau khi dịch + link quá dài (>1024 ký tự).");
           console.log(
             "📤 Chuyển sang gửi dưới dạng tin nhắn văn bản (không gửi kèm ảnh) để tránh mất nội dung.",
           );
+          // Gọi sendToTargetChat (nó sẽ tự thêm link)
           await sendToTargetChat(client, translatedCaption, messageId);
         } else {
-          // Gửi ảnh + caption đã dịch
+          // Gửi ảnh + caption đã dịch (link sẽ được thêm trong sendPhotoToTargetChat)
           await sendPhotoToTargetChat(
             client,
             message.photo,
